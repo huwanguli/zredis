@@ -74,6 +74,20 @@ func (s *Store) persist(key string) bool {
 	return false
 }
 
+// expireIfNeeded 惰性删除：如果 key 已过期则删除，返回 true 表示 key 已不存在。
+// 调用者必须持有锁。
+func (s *Store) expireIfNeeded(key string) bool {
+	exp, hasExp := s.expires[key]
+	if !hasExp {
+		return false
+	}
+	if time.Now().After(exp) {
+		s.del(key)
+		return true
+	}
+	return false
+}
+
 // --- 通用导出方法 ---
 
 // Del 删除 key 及其过期记录，返回 key 是否原本存在。

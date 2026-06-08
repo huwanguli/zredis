@@ -26,6 +26,7 @@ func (s *Store) setString(key string, value string) {
 // incrBy 将 key 的值加 delta。调用者必须持有锁。
 // key 不存在时视作 0；类型不匹配报错。
 func (s *Store) incrBy(key string, delta int64) (int64, error) {
+	s.expireIfNeeded(key)
 	entry, ok := s.get(key)
 	if !ok {
 		entry = &DataEntry{Type: DataString, String: "0"}
@@ -49,8 +50,7 @@ func (s *Store) incrBy(key string, delta int64) (int64, error) {
 func (s *Store) Get(key string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if exp, hasExp := s.expires[key]; hasExp && time.Now().After(exp) {
-		s.del(key)
+	if s.expireIfNeeded(key) {
 		return "", false
 	}
 	entry, ok := s.getString(key)
@@ -100,25 +100,32 @@ func (s *Store) DecrBy(key string, delta int64) (int64, error) {
 // --- APPEND ---
 
 // Append 将 value 追加到 key 已有值的末尾，返回追加后的总长度。
-// key 不存在相当于新建；类型不匹配返回 0。
-func (s *Store) Append(key string, value string) int {
+// key 不存在相当于新建；类型不匹配返回错误。
+func (s *Store) Append(key string, value string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.expireIfNeeded(key)
 	entry, ok := s.getString(key)
 	if !ok {
+		if _, exists := s.get(key); exists {
+			return 0, fmt.Errorf("WRONGTYPE Operation against a key holding the wrong kind of value")
+		}
 		s.setString(key, value)
-		return len(value)
+		return len(value), nil
 	}
 	entry.String += value
-	return len(entry.String)
+	return len(entry.String), nil
 }
 
 // --- STRLEN ---
 
-// StrLen 返回 string 类型 key 的字节长度。key 不存在或类型不匹配返回 0。
+// StrLen 返回 string 类型 key 的字节长度。key 不存在、已过期或类型不匹配返回 0。
 func (s *Store) StrLen(key string) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.expireIfNeeded(key) {
+		return 0
+	}
 	entry, ok := s.getString(key)
 	if !ok {
 		return 0
@@ -129,12 +136,15 @@ func (s *Store) StrLen(key string) int {
 // --- MGET / MSET ---
 
 // MGet 批量获取多个 key 的 string 值，返回与 keys 一一对应的结果。
-// key 不存在或类型不匹配返回空字符串。
+// key 不存在、已过期或类型不匹配返回空字符串。
 func (s *Store) MGet(keys ...string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	results := make([]string, len(keys))
 	for i, key := range keys {
+		if s.expireIfNeeded(key) {
+			continue
+		}
 		entry, ok := s.getString(key)
 		if ok {
 			results[i] = entry.String
@@ -158,6 +168,7 @@ func (s *Store) MSet(kvs map[string]string) {
 func (s *Store) GetSet(key string, value string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.expireIfNeeded(key)
 	entry, ok := s.getString(key)
 	oldVal := ""
 	if ok {
@@ -183,7 +194,8 @@ func (s *Store) SetEX(key string, value string, ttl time.Duration) {
 func (s *Store) SetNX(key string, value string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, exists := s.data[key]; exists {
+	s.expireIfNeeded(key)
+	if _, exists := s.get(key); exists {
 		return false
 	}
 	s.setString(key, value)

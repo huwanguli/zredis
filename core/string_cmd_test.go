@@ -122,7 +122,10 @@ func TestDecrBy_Basic(t *testing.T) {
 func TestAppend_Existing(t *testing.T) {
 	s := NewStore()
 	s.Set("key", "hello")
-	n := s.Append("key", " world")
+	n, err := s.Append("key", " world")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if n != 11 {
 		t.Errorf("expected length 11, got %d", n)
 	}
@@ -134,7 +137,10 @@ func TestAppend_Existing(t *testing.T) {
 
 func TestAppend_NonExistent(t *testing.T) {
 	s := NewStore()
-	n := s.Append("key", "hello")
+	n, err := s.Append("key", "hello")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if n != 5 {
 		t.Errorf("expected length 5, got %d", n)
 	}
@@ -147,7 +153,10 @@ func TestAppend_NonExistent(t *testing.T) {
 func TestAppend_Empty(t *testing.T) {
 	s := NewStore()
 	s.Set("key", "")
-	n := s.Append("key", "data")
+	n, err := s.Append("key", "data")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if n != 4 {
 		t.Errorf("expected length 4, got %d", n)
 	}
