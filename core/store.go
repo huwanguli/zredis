@@ -5,35 +5,48 @@ import (
 	"time"
 )
 
+// DataType 标识一个 key 存储的数据类型。
+type DataType byte
+
+const (
+	DataString DataType = iota
+	DataHash
+)
+
+// DataEntry 是 store 中实际存储的值，包含类型标记和对应数据。
+type DataEntry struct {
+	Type   DataType
+	String string
+	Hash   map[string]string
+}
+
 // Store 是一个线程安全的内存键值存储引擎。
 type Store struct {
 	mu      sync.RWMutex
-	data    map[string]string
+	data    map[string]*DataEntry
 	expires map[string]time.Time
 }
 
 // NewStore 创建并初始化一个新的 Store。
 func NewStore() *Store {
 	return &Store{
-		data:    make(map[string]string),
+		data:    make(map[string]*DataEntry),
 		expires: make(map[string]time.Time),
 	}
 }
 
-// --- 内部方法（小写，不加锁，由外部方法调用） ---
+// --- 通用内部方法（类型无关） ---
 
-// get 获取值（不检查过期），调用者必须持有锁。
-func (s *Store) get(key string) (string, bool) {
-	val, ok := s.data[key]
-	return val, ok
+// get 获取 key 对应的 DataEntry，不存在返回 nil, false。
+func (s *Store) get(key string) (*DataEntry, bool) {
+	entry, ok := s.data[key]
+	if !ok {
+		return nil, false
+	}
+	return entry, true
 }
 
-// set 设置值，调用者必须持有锁。
-func (s *Store) set(key string, value string) {
-	s.data[key] = value
-}
-
-// del 删除 key 及其过期记录，返回是否原本存在。调用者必须持有锁。
+// del 删除 key 及其过期记录，返回是否原本存在。
 func (s *Store) del(key string) bool {
 	if _, ok := s.data[key]; ok {
 		delete(s.data, key)
@@ -43,7 +56,7 @@ func (s *Store) del(key string) bool {
 	return false
 }
 
-// expire 设置过期时间，调用者必须持有锁。key 不存在返回 false。
+// expire 设置过期时间，key 不存在返回 false。
 func (s *Store) expire(key string, ttl time.Duration) bool {
 	if _, ok := s.data[key]; ok {
 		s.expires[key] = time.Now().Add(ttl)
@@ -52,7 +65,7 @@ func (s *Store) expire(key string, ttl time.Duration) bool {
 	return false
 }
 
-// persist 移除过期时间，调用者必须持有锁。
+// persist 移除过期时间。
 func (s *Store) persist(key string) bool {
 	if _, ok := s.data[key]; ok {
 		delete(s.expires, key)
@@ -61,30 +74,7 @@ func (s *Store) persist(key string) bool {
 	return false
 }
 
-// --- 导出方法（大写，加锁后调内部方法） ---
-
-// Get 获取 key 对应的值。使用写锁以支持惰性过期删除。
-// 如果 key 不存在或已过期，返回 "", false。
-func (s *Store) Get(key string) (string, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	val, ok := s.get(key)
-	if !ok {
-		return "", false
-	}
-	if exp, hasExp := s.expires[key]; hasExp && time.Now().After(exp) {
-		s.del(key)
-		return "", false
-	}
-	return val, ok
-}
-
-// Set 设置键值对，覆盖已有值。
-func (s *Store) Set(key string, value string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.set(key, value)
-}
+// --- 通用导出方法 ---
 
 // Del 删除 key 及其过期记录，返回 key 是否原本存在。
 func (s *Store) Del(key string) bool {
@@ -123,6 +113,6 @@ func (s *Store) Len() int {
 func (s *Store) Flush() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.data = make(map[string]string)
+	s.data = make(map[string]*DataEntry)
 	s.expires = make(map[string]time.Time)
 }

@@ -199,14 +199,14 @@ func TestMGet_AllExist(t *testing.T) {
 	if len(vals) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(vals))
 	}
-	if vals[0].Data == nil || string(vals[0].Data) != "1" {
-		t.Error("MGet[0] incorrect")
+	if vals[0] != "1" {
+		t.Errorf("MGet[0] expected '1', got '%s'", vals[0])
 	}
-	if vals[1].Data == nil || string(vals[1].Data) != "2" {
-		t.Error("MGet[1] incorrect")
+	if vals[1] != "2" {
+		t.Errorf("MGet[1] expected '2', got '%s'", vals[1])
 	}
-	if vals[2].Data == nil || string(vals[2].Data) != "3" {
-		t.Error("MGet[2] incorrect")
+	if vals[2] != "3" {
+		t.Errorf("MGet[2] expected '3', got '%s'", vals[2])
 	}
 }
 
@@ -219,11 +219,11 @@ func TestMGet_Mixed(t *testing.T) {
 	if len(vals) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(vals))
 	}
-	if vals[0].Data == nil {
-		t.Error("MGet[0] should not be null")
+	if vals[0] != "1" {
+		t.Errorf("MGet[0] expected '1', got '%s'", vals[0])
 	}
-	if vals[1].Data != nil {
-		t.Error("MGet[1] should be null (NewNullBulkVal)")
+	if vals[1] != "" {
+		t.Errorf("MGet[1] expected '', got '%s'", vals[1])
 	}
 }
 
@@ -231,8 +231,8 @@ func TestMGet_AllMissing(t *testing.T) {
 	s := NewStore()
 	vals := s.MGet("x", "y")
 	for i, v := range vals {
-		if v.Data != nil {
-			t.Errorf("MGet[%d] should be null", i)
+		if v != "" {
+			t.Errorf("MGet[%d] expected '', got '%s'", i, v)
 		}
 	}
 }
