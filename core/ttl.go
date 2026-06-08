@@ -7,11 +7,7 @@ import "time"
 func (s *Store) Expire(key string, ttl time.Duration) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.data[key]; ok {
-		s.expires[key] = time.Now().Add(ttl)
-		return true
-	}
-	return false
+	return s.expire(key, ttl)
 }
 
 // TTL 返回 key 的剩余生存时间。
@@ -36,11 +32,7 @@ func (s *Store) TTL(key string) time.Duration {
 func (s *Store) Persist(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.data[key]; ok {
-		delete(s.expires, key)
-		return true
-	}
-	return false
+	return s.persist(key)
 }
 
 // CleanExpired 随机抽取最多 batchSize 个带过期时间的 key，删除其中已过期的。
