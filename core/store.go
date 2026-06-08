@@ -1,34 +1,91 @@
 package core
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // Store 是一个线程安全的内存键值存储引擎。
-// 所有对 data 的访问都必须通过锁保护。
 type Store struct {
-	mu   sync.RWMutex
-	data map[string]string
+	mu      sync.RWMutex
+	data    map[string]string
+	expires map[string]time.Time
 }
 
-// TODO: 实现 NewStore() *Store — 创建并返回一个初始化好的 Store（data map 已分配）
+// NewStore 创建并初始化一个新的 Store。
+func NewStore() *Store {
+	return &Store{
+		data:    make(map[string]string),
+		expires: make(map[string]time.Time),
+	}
+}
 
-// TODO: 实现 Get(key string) (string, bool)
-//   使用读锁（RLock/RUnlock），从 data 中取值。
-//   如果 key 存在，返回值和 true；否则返回 "" 和 false。
+// Get 获取 key 对应的值。使用写锁以支持惰性过期删除。
+// 如果 key 不存在或已过期，返回 "", false。
+func (s *Store) Get(key string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	val, ok := s.data[key]
+	if !ok {
+		return "", false
+	}
+	if exp, hasExp := s.expires[key]; hasExp && time.Now().After(exp) {
+		delete(s.data, key)
+		delete(s.expires, key)
+		return "", false
+	}
+	return val, ok
+}
 
-// TODO: 实现 Set(key string, value string)
-//   使用写锁（Lock/Unlock），将键值对写入 data。
+// Set 设置键值对，覆盖已有值。
+func (s *Store) Set(key string, value string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[key] = value
+}
 
-// TODO: 实现 Del(key string) bool
-//   使用写锁。如果 key 存在，删除并返回 true；否则返回 false。
+// Del 删除 key 及其过期记录，返回 key 是否原本存在。
+func (s *Store) Del(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[key]; ok {
+		delete(s.data, key)
+		delete(s.expires, key)
+		return true
+	}
+	return false
+}
 
-// TODO: 实现 Exists(key string) bool
-//   使用读锁。如果 key 存在返回 true，否则 false。
+// Exists 判断 key 是否存在（不检查过期）。
+func (s *Store) Exists(key string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.data[key]
+	return ok
+}
 
-// TODO: 实现 Keys() []string
-//   使用读锁。遍历 data，返回所有 key 的切片。
+// Keys 返回 store 中所有 key 的列表。
+func (s *Store) Keys() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	keys := make([]string, 0, len(s.data))
+	for k := range s.data {
+		keys = append(keys, k)
+	}
+	return keys
+}
 
-// TODO: 实现 Len() int
-//   使用读锁。返回 data 中键值对的数量。
+// Len 返回 store 中 key 的数量。
+func (s *Store) Len() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.data)
+}
 
-// TODO: 实现 Flush()
-//   使用写锁。清空 data（重新分配一个空 map 或逐个删除）。
+// Flush 清空所有数据和过期记录。
+func (s *Store) Flush() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data = make(map[string]string)
+	s.expires = make(map[string]time.Time)
+}
