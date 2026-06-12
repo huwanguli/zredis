@@ -17,16 +17,26 @@ Hash 把这些信息聚在一个 key 下，方便批量操作和原子性。
 
 ## 实现方式
 
-在 Store 里加一个 `hashes` 字段，专门存 Hash 数据：
+Hash 数据存在 `DataEntry.Hash` 字段中（和 String 共享同一个 `data` map）：
 
 ```go
-type Store struct {
-    ...
-    hashes map[string]map[string]string  // key → (field → value)
+type DataEntry struct {
+    Type   DataType              // DataHash
+    String string                // String 类型用
+    Hash   map[string]string     // Hash 类型用 ← 这个
 }
 ```
 
-这是最简方案，后续可以统一重构为 `map[string]Value` 接口。
+**和 String 的关系**：同一个 key 不能既是 String 又是 Hash。`getHash(key)` 检查 `Type == DataHash`，
+`getString(key)` 检查 `Type == DataString`，互斥。
+
+**架构模式**（和 `string_cmd.go` 一致）：
+
+```
+hash.go
+  内部方法：getHash / hset          ← 不锁，调用者持锁
+  导出方法：HSet / HGet / HDel ...  ← Lock + expireIfNeeded + 调内部方法
+```
 
 ## 要实现的命令
 
@@ -35,14 +45,21 @@ type Store struct {
 | `HSET key field value [field value ...]` | 设值 | 新增 field 数量 |
 | `HGET key field` | 取值 | 值和是否存在 |
 | `HDEL key field [field ...]` | 删 field | 删除数量 |
-| `HGETALL key` | 取全部 | field→value 的 map |
+| `HGETALL key` | 取全部 | field→value 的 map（副本） |
 | `HEXISTS key field` | 判断存在 | bool |
 | `HLEN key` | field 数量 | int |
 | `HKEYS key` | 所有 field 名 | []string |
 | `HVALS key` | 所有 value | []string |
 
-## 细节
+## 你要写的
 
-- key 不存在时，除 HGET/HEXISTS 返回 false 外，其余命令返回 0 / 空
-- HSET 支持多对 field-value（变长参数），返回**新增**的数量（不是修改的）
-- 继续用内部/导出拆分模式，HSET 内部版供后续组合命令复用
+只写 **`hset`** 内部方法（`hash.go` 第 20 行）。其余 7 个导出方法我已经写好了，对照理解即可。
+
+`hset` 的逻辑：
+1. 调 `s.get(key)` 取 entry
+2. 不存在 → 创建 `&DataEntry{Type: DataHash, Hash: make(map[string]string)}`，写入 `s.data[key]`
+3. 已存在但 `Type != DataHash` → 创建新 entry 覆盖（Redis 会报 WRONGTYPE，原型简化处理）
+4. 遍历 `pairs`（步长 2：field, value），填入 `entry.Hash`
+5. 统计**新增**的 field 数量（已存在的修改不计入），返回
+
+参考 `string_cmd.go` 中 `incrBy` 操作 `entry` 的方式。

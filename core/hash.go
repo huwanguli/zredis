@@ -1,5 +1,10 @@
 package core
 
+import (
+	"fmt"
+	"maps"
+)
+
 // --- 内部方法 ---
 
 // getHash 获取 hash 类型的 field→value 映射，调用者必须持有锁。
@@ -12,22 +17,42 @@ func (s *Store) getHash(key string) (map[string]string, bool) {
 	return entry.Hash, true
 }
 
+// lookupHash 获取 hash 类型的映射，内置惰性过期删除和类型检查。
+// 调用者必须持有锁。
+func (s *Store) lookupHash(key string) (map[string]string, bool) {
+	s.expireIfNeeded(key)
+	return s.getHash(key)
+}
+
 // hset 设置 hash 中的 field→value 对。调用者必须持有锁。
 // pairs 是成对的 field1, value1, field2, value2, ...
 // 返回新增的 field 数量（修改已存在的不计入）。
-func (s *Store) hset(key string, pairs ...string) int {
-	// TODO: 基于 DataEntry 重写
-	//   1. 取 entry，不存在则创建 &DataEntry{Type: DataHash, Hash: make(map[string]string)}
-	//   2. 如果已存在但 Type != DataHash，这里简单：创建新 entry 覆盖
-	//   3. 遍历 pairs（步长 2），填 entry.Hash，统计新增数量
-	return 0
+func (s *Store) hset(key string, pairs ...string) (int, error) {
+	entry, ok := s.get(key)
+	if !ok {
+		entry = &DataEntry{Type: DataHash, Hash: make(map[string]string)}
+		s.data[key] = entry
+	}
+	if ok && entry.Type != DataHash {
+		return 0, fmt.Errorf("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+	newFields := 0
+	for i := 0; i < len(pairs); i += 2 {
+		field := pairs[i]
+		value := pairs[i+1]
+		if _, exists := entry.Hash[field]; !exists {
+			newFields++
+		}
+		entry.Hash[field] = value
+	}
+	return newFields, nil
 }
 
 // --- 导出方法 ---
 
 // HSet 设置 hash 字段。pairs 是成对的 field, value。
 // 返回新增的 field 数量。
-func (s *Store) HSet(key string, pairs ...string) int {
+func (s *Store) HSet(key string, pairs ...string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.hset(key, pairs...)
@@ -35,9 +60,9 @@ func (s *Store) HSet(key string, pairs ...string) int {
 
 // HGet 获取 hash 中指定 field 的值。
 func (s *Store) HGet(key string, field string) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	hash, ok := s.getHash(key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hash, ok := s.lookupHash(key)
 	if !ok {
 		return "", false
 	}
@@ -49,7 +74,7 @@ func (s *Store) HGet(key string, field string) (string, bool) {
 func (s *Store) HDel(key string, fields ...string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	hash, ok := s.getHash(key)
+	hash, ok := s.lookupHash(key)
 	if !ok {
 		return 0
 	}
@@ -65,24 +90,20 @@ func (s *Store) HDel(key string, fields ...string) int {
 
 // HGetAll 返回 hash 全部 field→value 对。key 不存在或类型不匹配返回 nil。
 func (s *Store) HGetAll(key string) map[string]string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	hash, ok := s.getHash(key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hash, ok := s.lookupHash(key)
 	if !ok {
 		return nil
 	}
-	result := make(map[string]string, len(hash))
-	for k, v := range hash {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(hash)
 }
 
 // HExists 判断 hash 中指定 field 是否存在。
 func (s *Store) HExists(key string, field string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	hash, ok := s.getHash(key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hash, ok := s.lookupHash(key)
 	if !ok {
 		return false
 	}
@@ -92,9 +113,9 @@ func (s *Store) HExists(key string, field string) bool {
 
 // HLen 返回 hash 中 field 的数量。
 func (s *Store) HLen(key string) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	hash, ok := s.getHash(key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hash, ok := s.lookupHash(key)
 	if !ok {
 		return 0
 	}
@@ -103,9 +124,9 @@ func (s *Store) HLen(key string) int {
 
 // HKeys 返回 hash 中所有 field 名。
 func (s *Store) HKeys(key string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	hash, ok := s.getHash(key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hash, ok := s.lookupHash(key)
 	if !ok {
 		return nil
 	}
@@ -118,9 +139,9 @@ func (s *Store) HKeys(key string) []string {
 
 // HVals 返回 hash 中所有 value。
 func (s *Store) HVals(key string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	hash, ok := s.getHash(key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hash, ok := s.lookupHash(key)
 	if !ok {
 		return nil
 	}

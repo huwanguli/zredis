@@ -6,7 +6,7 @@ import "testing"
 
 func TestHSet_HGet_Basic(t *testing.T) {
 	s := NewStore()
-	n := s.HSet("user:1", "name", "zhangsan", "age", "25")
+	n, _  := s.HSet("user:1", "name", "zhangsan", "age", "25")
 	if n != 2 {
 		t.Errorf("expected 2 new fields, got %d", n)
 	}
@@ -25,7 +25,7 @@ func TestHSet_HGet_Basic(t *testing.T) {
 func TestHSet_UpdateExisting(t *testing.T) {
 	s := NewStore()
 	s.HSet("key", "a", "1")
-	n := s.HSet("key", "a", "new", "b", "2")
+	n,_ := s.HSet("key", "a", "new", "b", "2")
 	if n != 1 {
 		t.Errorf("expected 1 new field (b), got %d", n)
 	}

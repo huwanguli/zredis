@@ -23,6 +23,13 @@ func (s *Store) setString(key string, value string) {
 	s.data[key] = &DataEntry{Type: DataString, String: value}
 }
 
+// lookupString 获取 string 类型的 DataEntry，内置惰性过期删除和类型检查。
+// 调用者必须持有锁。
+func (s *Store) lookupString(key string) (*DataEntry, bool) {
+	s.expireIfNeeded(key)
+	return s.getString(key)
+}
+
 // incrBy 将 key 的值加 delta。调用者必须持有锁。
 // key 不存在时视作 0；类型不匹配报错。
 func (s *Store) incrBy(key string, delta int64) (int64, error) {
@@ -50,10 +57,7 @@ func (s *Store) incrBy(key string, delta int64) (int64, error) {
 func (s *Store) Get(key string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.expireIfNeeded(key) {
-		return "", false
-	}
-	entry, ok := s.getString(key)
+	entry, ok := s.lookupString(key)
 	if !ok {
 		return "", false
 	}
@@ -104,8 +108,7 @@ func (s *Store) DecrBy(key string, delta int64) (int64, error) {
 func (s *Store) Append(key string, value string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.expireIfNeeded(key)
-	entry, ok := s.getString(key)
+	entry, ok := s.lookupString(key)
 	if !ok {
 		if _, exists := s.get(key); exists {
 			return 0, fmt.Errorf("WRONGTYPE Operation against a key holding the wrong kind of value")
@@ -123,10 +126,7 @@ func (s *Store) Append(key string, value string) (int, error) {
 func (s *Store) StrLen(key string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.expireIfNeeded(key) {
-		return 0
-	}
-	entry, ok := s.getString(key)
+	entry, ok := s.lookupString(key)
 	if !ok {
 		return 0
 	}
@@ -142,10 +142,7 @@ func (s *Store) MGet(keys ...string) []string {
 	defer s.mu.Unlock()
 	results := make([]string, len(keys))
 	for i, key := range keys {
-		if s.expireIfNeeded(key) {
-			continue
-		}
-		entry, ok := s.getString(key)
+		entry, ok := s.lookupString(key)
 		if ok {
 			results[i] = entry.String
 		}
@@ -168,8 +165,7 @@ func (s *Store) MSet(kvs map[string]string) {
 func (s *Store) GetSet(key string, value string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.expireIfNeeded(key)
-	entry, ok := s.getString(key)
+	entry, ok := s.lookupString(key)
 	oldVal := ""
 	if ok {
 		oldVal = entry.String
