@@ -1,6 +1,7 @@
 package core
 
 import (
+	"container/list"
 	"sync"
 	"time"
 )
@@ -11,6 +12,7 @@ type DataType byte
 const (
 	DataString DataType = iota
 	DataHash
+	DataList
 )
 
 // DataEntry 是 store 中实际存储的值，包含类型标记和对应数据。
@@ -18,6 +20,7 @@ type DataEntry struct {
 	Type   DataType
 	String string
 	Hash   map[string]string
+	List   *list.List
 }
 
 // Store 是一个线程安全的内存键值存储引擎。

@@ -28,6 +28,7 @@ func (s *Store) lookupHash(key string) (map[string]string, bool) {
 // pairs 是成对的 field1, value1, field2, value2, ...
 // 返回新增的 field 数量（修改已存在的不计入）。
 func (s *Store) hset(key string, pairs ...string) (int, error) {
+	s.expireIfNeeded(key)
 	entry, ok := s.get(key)
 	if !ok {
 		entry = &DataEntry{Type: DataHash, Hash: make(map[string]string)}
