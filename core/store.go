@@ -13,6 +13,7 @@ const (
 	DataString DataType = iota
 	DataHash
 	DataList
+	DataSet
 )
 
 // DataEntry 是 store 中实际存储的值，包含类型标记和对应数据。
@@ -21,6 +22,7 @@ type DataEntry struct {
 	String string
 	Hash   map[string]string
 	List   *list.List
+	Set    map[string]struct{}
 }
 
 // Store 是一个线程安全的内存键值存储引擎。
