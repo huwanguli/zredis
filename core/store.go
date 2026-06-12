@@ -14,6 +14,7 @@ const (
 	DataHash
 	DataList
 	DataSet
+	DataZSet
 )
 
 // DataEntry 是 store 中实际存储的值，包含类型标记和对应数据。
@@ -23,6 +24,7 @@ type DataEntry struct {
 	Hash   map[string]string
 	List   *list.List
 	Set    map[string]struct{}
+	ZSet   *SkipList
 }
 
 // Store 是一个线程安全的内存键值存储引擎。

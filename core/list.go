@@ -8,7 +8,6 @@ import (
 // --- 内部方法 ---
 
 // getList 获取 list 类型的链表，调用者必须持有锁。
-// key 不存在或类型不匹配返回 nil, false。
 func (s *Store) getList(key string) (*list.List, bool) {
 	entry, ok := s.get(key)
 	if !ok || entry.Type != DataList {
@@ -18,14 +17,12 @@ func (s *Store) getList(key string) (*list.List, bool) {
 }
 
 // lookupList 获取 list 类型的链表，内置惰性过期删除和类型检查。
-// 调用者必须持有锁。
 func (s *Store) lookupList(key string) (*list.List, bool) {
 	s.expireIfNeeded(key)
 	return s.getList(key)
 }
 
 // lpush 左端推入一个或多个值。调用者必须持有锁，且已确保类型正确。
-// 返回操作后的列表长度。
 func (s *Store) lpush(key string, values ...string) int {
 	entry, ok := s.get(key)
 	if !ok {
@@ -39,7 +36,6 @@ func (s *Store) lpush(key string, values ...string) int {
 }
 
 // rpush 右端推入一个或多个值。调用者必须持有锁，且已确保类型正确。
-// 返回操作后的列表长度。
 func (s *Store) rpush(key string, values ...string) int {
 	entry, ok := s.get(key)
 	if !ok {
