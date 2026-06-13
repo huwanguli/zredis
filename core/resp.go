@@ -142,12 +142,45 @@ func NewWriter(wr io.Writer) *Writer {
 
 // WriteValue 将一个 Value 按 RESP 格式编码并写入。
 func (w *Writer) WriteValue(v Value) error {
-	// TODO: type switch on v
-	//   *StringVal → 写 +str\r\n
-	//   *ErrorVal   → 写 -msg\r\n
-	//   *IntVal     → 写 :n\r\n
-	//   *BulkVal    → 写 $len\r\ndata\r\n（Data == nil → $-1\r\n）
-	//   *ArrayVal   → 写 *n\r\n + 递归（Items == nil → *-1\r\n）
+	switch v := v.(type) {
+	case *StringVal:
+		if _, err := fmt.Fprintf(w.w, "+%s\r\n", v.Str); err != nil {
+			return err
+		}
+	case *ErrorVal:
+		if _, err := fmt.Fprintf(w.w, "-%s\r\n", v.Msg); err != nil {
+			return err
+		}
+	case *IntVal:
+		if _, err := fmt.Fprintf(w.w, ":%s\r\n", strconv.FormatInt(v.N, 10)); err != nil {
+			return err
+		}
+	case *BulkVal:
+		if v.Data == nil {
+			if _, err := fmt.Fprint(w.w, "$-1\r\n"); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprintf(w.w, "$%d\r\n%s\r\n", len(v.Data), string(v.Data)); err != nil {
+				return err
+			}
+		}
+	case *ArrayVal:
+		if v.Items == nil {
+			if _, err := fmt.Fprint(w.w, "*-1\r\n"); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprintf(w.w, "*%d\r\n", len(v.Items)); err != nil {
+				return err
+			}
+			for _, item := range v.Items {
+				if err := w.WriteValue(item); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	return nil
 }
 
