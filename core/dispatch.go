@@ -64,7 +64,7 @@ func (d *Dispatcher) registerDefaults() {
 	d.cmds["DEL"] = cmdDel
 	d.cmds["EXISTS"] = cmdExists
 	d.cmds["KEYS"] = cmdKeys
-	d.cmds["FLUSH"] = cmdFlush
+	d.cmds["FLUSHALL"] = cmdFlush
 	d.cmds["EXPIRE"] = cmdExpire
 	d.cmds["TTL"] = cmdTTL
 	d.cmds["PERSIST"] = cmdPersist
