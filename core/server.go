@@ -19,7 +19,7 @@ type Server struct {
 func NewServer() *Server {
 	store := NewStore()
 	disp := NewDispatcher()
-	aof, err := NewAOF("appendonly.aof")
+	aof, err := NewAOF("aof_file.aof")
 	if err != nil {
 		log.Fatalf("failed to create AOF: %v", err)
 	}

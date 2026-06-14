@@ -44,11 +44,12 @@ core/
 ├── resp.go             RESP 协议解码器 + 编码器
 ├── dispatch.go         40 个命令分发器
 ├── server.go           TCP 服务器
+├── aof.go              AOF 持久化
 ```
 
 ## 学习文档
 
-按照构建顺序，共 12 步，每步一篇中文讲解：
+按照构建顺序，共 13 步，每步一篇中文讲解：
 
 | 步骤 | 文档 | 内容 |
 |------|------|------|
@@ -64,6 +65,7 @@ core/
 | 10 | [docs/10-resp-encoder.md](docs/10-resp-encoder.md) | RESP 编码器 |
 | 11 | [docs/11-dispatcher.md](docs/11-dispatcher.md) | 命令分发器 |
 | 12 | [docs/12-tcp-server.md](docs/12-tcp-server.md) | TCP 服务器 |
+| 13 | [docs/13-aof.md](docs/13-aof.md) | AOF 持久化 |
 
 ## 协议
 
