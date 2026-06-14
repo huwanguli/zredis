@@ -12,13 +12,24 @@ import (
 type Server struct {
 	store *Store
 	disp  *Dispatcher
+	aof   *AOF
 }
 
 // NewServer 创建一个新的 Server 实例。
 func NewServer() *Server {
+	store := NewStore()
+	disp := NewDispatcher()
+	aof, err := NewAOF("appendonly.aof")
+	if err != nil {
+		log.Fatalf("failed to create AOF: %v", err)
+	}
+	if err := aof.Load(store, disp); err != nil {
+		log.Printf("AOF load error: %v", err)
+	}
 	return &Server{
-		store: NewStore(),
-		disp:  NewDispatcher(),
+		store: store,
+		disp:  disp,
+		aof:   aof,
 	}
 }
 
@@ -63,6 +74,11 @@ func (srv *Server) handleConn(conn net.Conn) {
 		log.Printf("[%s] %s", remote, srv.cmdName(cmd))
 
 		resp := srv.disp.Dispatch(srv.store, cmd)
+		if IsWriteCmd(srv.cmdName(cmd)) {
+			if err := srv.aof.Write(cmd); err != nil {
+				log.Printf("[%s] AOF write error: %v", remote, err)
+			}
+		}
 		if err := w.WriteValue(resp); err != nil {
 			return
 		}

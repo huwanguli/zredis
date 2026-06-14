@@ -3,9 +3,17 @@ package core
 import (
 	"fmt"
 	"net"
+	"os"
 	"testing"
 	"time"
 )
+
+func TestMain(m *testing.M) {
+	os.Remove("appendonly.aof") // 清理上次残留
+	code := m.Run()
+	os.Remove("appendonly.aof")
+	os.Exit(code)
+}
 
 func TestServer_Ping(t *testing.T) {
 	srv := NewServer()
